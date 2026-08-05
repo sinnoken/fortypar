@@ -97,7 +97,7 @@ function Test-Cond {
 
 function Test-All {
     param($Obj, $Conds)
-    if ($Conds -eq $null) { return $true }
+    if ($null -eq $Conds) { return $true }
     foreach ($c in $Conds) {
         if (-not (Test-Cond $Obj $c)) { return $false }
     }

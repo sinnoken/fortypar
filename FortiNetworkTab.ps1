@@ -42,6 +42,40 @@ function Get-NetCidr {
     return "$ip/$(Get-MaskBits $mk)"
 }
 
+function Get-RouteSortKey {
+    param([string]$Dst)
+
+    # A route destination sorted as text puts 10.x before 2.x. The key below
+    # is a fixed width string so the existing Sort-Object still does the work:
+    #   family | address bytes as hex | prefix length | name
+    # Families are separated first so v4 and v6 never interleave, and a named
+    # dstaddr object (which has no numeric order) sorts after every prefix.
+
+    $addr = $Dst
+    $bits = ''
+    $slash = $Dst.IndexOf('/')
+    if ($slash -ge 0) {
+        $addr = $Dst.Substring(0, $slash)
+        $bits = $Dst.Substring($slash + 1)
+    }
+
+    $ip = $null
+    if (-not [System.Net.IPAddress]::TryParse($addr, [ref]$ip)) {
+        return '2|' + ('0' * 32) + '|000|' + $Dst.ToLower()
+    }
+
+    $fam = '0'
+    if ($ip.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6) { $fam = '1' }
+
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($b in $ip.GetAddressBytes()) { [void]$sb.Append($b.ToString('x2')) }
+
+    $n = 0
+    [void][int]::TryParse($bits, [ref]$n)
+
+    return "$fam|" + $sb.ToString().PadRight(32, '0') + '|' + $n.ToString('000') + '|'
+}
+
 function Get-NetModel {
     param($Objects)
 
@@ -110,6 +144,7 @@ function Get-NetModel {
             if (-not $st) { $st = 'enable' }
             $routes.Add(@{
                 V = $o.V; Seq = $o.N; Dst = $dst; Gw = $gw
+                SortKey = Get-RouteSortKey $dst
                 Dev = Strip-Quotes ([string]$t['device'])
                 Dist = $d
                 Pri = Strip-Quotes ([string]$t['priority'])
@@ -477,7 +512,7 @@ function Fill-NetGridRows {
 function Fill-NetRoutes {
     param($M, [string]$Zone)
     $rows = [System.Collections.Generic.List[object]]::new()
-    foreach ($r in ($M.Routes | Sort-Object @{e = { $_.V }}, @{e = { $_.Dst }})) {
+    foreach ($r in ($M.Routes | Sort-Object @{e = { $_.V }}, @{e = { $_.SortKey }})) {
         if ($Zone -ne '*' -and $r.V -ne $Zone) { continue }
         $rows.Add(@($r.V, $r.Seq, $r.Dst, $r.Gw, $r.Dev, $r.Dist, $r.Pri, $r.Status, $r.Cmt))
     }

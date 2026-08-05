@@ -1,4 +1,4 @@
-﻿<#
+<#
     FortiGate Config Toolkit
     Cleanup analysis and compliance checking over one parsed config.
 
@@ -837,6 +837,11 @@ function Load-File {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
     try {
+        # the network view caches its model against the previous $script:Audit
+        # by reference; clearing it here keeps that cache honest even if the
+        # audit hashtable is ever updated in place instead of rebuilt
+        $script:NetLast = $null
+
         $full = (Resolve-Path -LiteralPath $Path).ProviderPath
         $script:Path = $full
         $script:Lines = [System.IO.File]::ReadAllLines($full)
@@ -1181,9 +1186,16 @@ $btnAll.Add_Click({ Set-AllTicks $true })
 $btnNone.Add_Click({ Set-AllTicks $false })
 
 $btnCopy.Add_Click({
-    if ($txtCli.Text) {
+    if (-not $txtCli.Text) { return }
+    # Clipboard needs an STA thread. PowerShell 7 defaults to MTA, so without
+    # -STA this throws; report it on the status bar instead of letting an
+    # unhandled exception dialog surface.
+    try {
         [System.Windows.Forms.Clipboard]::SetText($txtCli.Text)
         $statusLabel.Text = 'CLI copied to clipboard.'
+    }
+    catch {
+        $statusLabel.Text = 'Clipboard unavailable - start PowerShell with -STA, or select the text and copy manually.'
     }
 })
 
@@ -1265,7 +1277,7 @@ $pnlDrop.Add_DragDrop($dragDrop)
 $lblDrop.Add_DragEnter($dragEnter)
 $lblDrop.Add_DragDrop($dragDrop)
 
-. "$PSScriptRoot\FortiNetworkTab.ps1"
+. (Join-Path $here 'FortiNetworkTab.ps1')
 $form.Add_Shown({
     Update-TopLayout
     Update-CliBar
