@@ -131,7 +131,7 @@ $tree.ItemHeight = 22
 $tree.ShowRootLines = $false
 
 $lblZone = New-Object System.Windows.Forms.Label
-$lblZone.Text = '  Logical zones'
+$lblZone.Text = '  VDOMs'
 $lblZone.Dock = 'Top'
 $lblZone.Height = 26
 $lblZone.TextAlign = 'MiddleLeft'
@@ -363,17 +363,17 @@ function New-GridTab {
 }
 
 New-GridTab 'Comp' 'Compliance' `
-    @('Sev','Zone','ID','Category','Requirement','Object','Observed','Line') `
+    @('Sev','vdom','ID','Category','Requirement','Object','Observed','Line') `
     @(38, 68, 78, 60, 128, 290, 145, 290, 55) `
     'Rules run on the parsed object tree, so a setting on one entry can never satisfy a rule about another.'
 
 New-GridTab 'Safe' 'Safe to remove' `
-    @('Zone','Kind','Type','Name','Value','Why','Line') `
+    @('vdom','Kind','Type','Name','Value','Why','Line') `
     @(38, 78, 96, 145, 165, 190, 260, 55) `
     'Nothing in the config points at these. Verify with refcnt on the device before deleting.'
 
 New-GridTab 'Decide' 'Needs a decision' `
-    @('Zone','Category','Same value','Count','Suggested keep','Would drop','Lines') `
+    @('vdom','Category','Same value','Count','Suggested keep','Would drop','Lines') `
     @(38, 78, 118, 215, 50, 140, 215, 85) `
     'Same value, different names. Pick a keeper, repoint every reference, then delete. Deletes are generated commented out.'
 
@@ -533,7 +533,7 @@ function Show-Empty {
     if ($Rows -gt 0) { $lb.Visible = $false; return }
 
     $zone = 'this device'
-    if ($script:CurZone -ne '*') { $zone = "zone '$($script:CurZone)'" }
+    if ($script:CurZone -ne '*') { $zone = "vdom '$($script:CurZone)'" }
 
     $what = 'items'
     if ($Key -eq 'Comp')   { $what = 'compliance findings' }
@@ -568,8 +568,8 @@ function Apply-View {
     $view = New-Object System.Data.DataView($dt)
     if ($script:CurZone -ne '*') {
         $z = $script:CurZone.Replace("'", "''")
-        if ($Key -eq 'Decide') { $view.RowFilter = "[Zone] LIKE '%$z%'" }
-        else { $view.RowFilter = "[Zone] = '$z'" }
+        if ($Key -eq 'Decide') { $view.RowFilter = "[vdom] LIKE '%$z%'" }
+        else { $view.RowFilter = "[vdom] = '$z'" }
     }
     $script:Grids[$Key].DataSource = $view
     Build-TypeBar $Key
@@ -681,7 +681,7 @@ function Show-Detail {
         $f.Text = "$($R.Id)  -  $($R.Title)"
         [void]$sb.AppendLine("Rule       $($R.Id)   severity $($R.Sev)")
         [void]$sb.AppendLine("Category   $($R.Cat)")
-        [void]$sb.AppendLine("Zone       $($R.Zone)")
+        [void]$sb.AppendLine("vdom       $($R.Zone)")
         [void]$sb.AppendLine("Section    $($R.Scope)")
         if ($R.Obj) { [void]$sb.AppendLine("Object     $($R.Obj)") }
         [void]$sb.AppendLine('')
@@ -704,7 +704,7 @@ function Show-Detail {
     }
     elseif ($Key -eq 'Safe') {
         $f.Text = "$($R.Kind)  -  $($R.N)"
-        [void]$sb.AppendLine("Zone       $($R.V)")
+        [void]$sb.AppendLine("vdom       $($R.V)")
         [void]$sb.AppendLine("Section    $($R.S)")
         [void]$sb.AppendLine("Name       $($R.N)")
         [void]$sb.AppendLine("Value      $($R.Val)")
@@ -729,7 +729,7 @@ function Show-Detail {
     }
     else {
         $f.Text = "$($R.C)  -  $($R.K)"
-        [void]$sb.AppendLine("Zone       $($R.V)")
+        [void]$sb.AppendLine("vdom       $($R.V)")
         [void]$sb.AppendLine("Category   $($R.C)")
         [void]$sb.AppendLine("Value      $($R.K)")
         [void]$sb.AppendLine("Count      $($R.Cnt)")
@@ -974,7 +974,7 @@ function Build-Tree {
             if ($f -eq 0) { $n.ForeColor = [System.Drawing.Color]::FromArgb(150, 152, 158) }
             [void]$root.Nodes.Add($n)
         }
-        $lblZone.Text = "  Logical zones - $($zones.Count)"
+        $lblZone.Text = "  VDOMs - $($zones.Count)"
     } else {
         $lblZone.Text = '  VDOM mode is off'
         $splitMain.Panel1Collapsed = $true
@@ -1252,21 +1252,21 @@ $btnSave.Add_Click({
         $rows.Add(@($st, $r.Sev, $r.Zone, $r.Id, $r.Cat, $r.Title, $r.Obj, $r.Scope, $r.Detail, $r.Line))
     }
     Write-Csv (Join-Path $dir '1_compliance.csv') `
-        @('Result','Severity','Zone','RuleID','Category','Requirement','Object','Section','Observed','Line') $rows
+        @('Result','Severity','vdom','RuleID','Category','Requirement','Object','Section','Observed','Line') $rows
 
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($r in $script:Audit.Safe) {
         $rows.Add(@($r.V, $r.Kind, $r.S, $r.N, $r.Val, $r.Why, $r.Cm, $r.L))
     }
     Write-Csv (Join-Path $dir '2_removable.csv') `
-        @('Zone','Kind','Section','Name','Value','Why','Comment','Line') $rows
+        @('vdom','Kind','Section','Name','Value','Why','Comment','Line') $rows
 
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($r in $script:Audit.Decide) {
         $rows.Add(@($r.V, $r.C, $r.K, $r.Cnt, $r.Keep, $r.Drop, $r.L))
     }
     Write-Csv (Join-Path $dir '3_duplicates.csv') `
-        @('Zone','Category','Value','Count','SuggestedKeep','WouldDrop','Lines') $rows
+        @('vdom','Category','Value','Count','SuggestedKeep','WouldDrop','Lines') $rows
 
     $form.Cursor = [System.Windows.Forms.Cursors]::Default
     $statusLabel.Text = "Report written to $dir"

@@ -42,6 +42,30 @@ function Get-NetCidr {
     return "$ip/$(Get-MaskBits $mk)"
 }
 
+function Get-ConnectedNet {
+    param([string]$Cidr)
+    # Interface IP keeps host bits (10.1.1.5/24); a connected route shows the
+    # network (10.1.1.0/24), so the host bits are masked off here. v4 and v6.
+    $slash = $Cidr.IndexOf('/')
+    if ($slash -lt 0) { return $Cidr }
+    $ipStr = $Cidr.Substring(0, $slash)
+    $bits = 0
+    [void][int]::TryParse($Cidr.Substring($slash + 1), [ref]$bits)
+    $ip = $null
+    if (-not [System.Net.IPAddress]::TryParse($ipStr, [ref]$ip)) { return $Cidr }
+    $bytes = $ip.GetAddressBytes()
+    $rem = $bits
+    for ($b = 0; $b -lt $bytes.Length; $b++) {
+        if ($rem -ge 8) { $rem = $rem - 8; continue }
+        if ($rem -le 0) { $bytes[$b] = 0; continue }
+        $mask = [byte]((0xFF -shl (8 - $rem)) -band 0xFF)
+        $bytes[$b] = $bytes[$b] -band $mask
+        $rem = 0
+    }
+    $net = [System.Net.IPAddress]::new($bytes)
+    return "$($net.ToString())/$bits"
+}
+
 function Get-RouteSortKey {
     param([string]$Dst)
 
@@ -125,6 +149,31 @@ function Get-NetModel {
                 Mtu    = Strip-Quotes ([string]$t['mtu'])
                 L      = $o.L
             })
+            # connected route derived from the interface's own subnet. It is not
+            # a route object in the config, so its line points at the interface.
+            # Skipped when the address is unknown (dhcp/pppoe) or the link is down.
+            if ($mode -ne 'dhcp' -and $mode -ne 'pppoe' -and $addr -and $addr.IndexOf('/') -ge 0) {
+                $ist = Strip-Quotes ([string]$t['status'])
+                if ($ist -ne 'down') {
+                    $net = Get-ConnectedNet $addr
+                    $cmt = Strip-Quotes ([string]$t['alias'])
+                    if (-not $cmt) { $cmt = Strip-Quotes ([string]$t['description']) }
+                    # In VDOM mode an interface is defined under config global and
+                    # assigned with 'set vdom', so $o.V is 'global' but the route
+                    # belongs to the assigned vdom. Fall back to $o.V when there is
+                    # no 'set vdom' (single-vdom config), which is 'root'.
+                    $ivd = Strip-Quotes ([string]$t['vdom'])
+                    if (-not $ivd) { $ivd = $o.V }
+                    $routes.Add(@{
+                        V = $ivd; Src = 'connected'; Seq = ''; Dst = $net; Gw = ''
+                        SortKey = Get-RouteSortKey $net
+                        Dev = $o.N; Dist = '0'; Pri = ''
+                        Status = $(if ($ist) { $ist } else { 'up' })
+                        Cmt = $cmt
+                        L = $o.L
+                    })
+                }
+            }
             continue
         }
 
@@ -143,7 +192,7 @@ function Get-NetModel {
             $st = Strip-Quotes ([string]$t['status'])
             if (-not $st) { $st = 'enable' }
             $routes.Add(@{
-                V = $o.V; Seq = $o.N; Dst = $dst; Gw = $gw
+                V = $o.V; Src = 'static'; Seq = $o.N; Dst = $dst; Gw = $gw
                 SortKey = Get-RouteSortKey $dst
                 Dev = Strip-Quotes ([string]$t['device'])
                 Dist = $d
@@ -356,8 +405,8 @@ $pgIf.Controls.Add($treeIf)
 if ($pgIf.Tag) { $pgIf.Controls.Add($pgIf.Tag) }
 
 # ---------- routing ----------
-$pgRt = New-NetPage 'Routing' 'Static routes only. Dynamic protocols are not resolved from a config file.'
-$gridRt = New-NetGrid $pgRt @('Zone','Seq','Destination','Gateway','Device','Dist','Pri','Status','Comment') @(90,50,150,130,110,50,45,65,240)
+$pgRt = New-NetPage 'Routing' 'Static plus connected routes. Connected routes are derived from interface IPs (line points to the interface); DHCP/PPPoE, IPv6, secondary IPs and down interfaces are omitted. Dynamic protocols are not resolved from a config file.'
+$gridRt = New-NetGrid $pgRt @('vdom','Source','Seq','Destination','Gateway','Device','Dist','Pri','Status','Comment') @(90,80,50,150,130,110,50,45,65,240)
 
 # ---------- vpn ----------
 $pgVpn = New-NetPage 'VPN' 'IPsec phase 1 tunnels with their phase 2 selectors underneath.'
@@ -405,7 +454,7 @@ $gridMx.Add_CellFormatting({
 
 # ---------- services ----------
 $pgSv = New-NetPage 'Services' 'Device services parsed from the config.'
-$gridSv = New-NetGrid $pgSv @('Zone','Service','Name','Detail') @(90,110,140,700)
+$gridSv = New-NetGrid $pgSv @('vdom','Service','Name','Detail') @(90,110,140,700)
 
 # =================================================================== FILL
 
@@ -514,7 +563,7 @@ function Fill-NetRoutes {
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($r in ($M.Routes | Sort-Object @{e = { $_.V }}, @{e = { $_.SortKey }})) {
         if ($Zone -ne '*' -and $r.V -ne $Zone) { continue }
-        $rows.Add(@($r.V, $r.Seq, $r.Dst, $r.Gw, $r.Dev, $r.Dist, $r.Pri, $r.Status, $r.Cmt))
+        $rows.Add(@($r.V, $r.Src, $r.Seq, $r.Dst, $r.Gw, $r.Dev, $r.Dist, $r.Pri, $r.Status, $r.Cmt))
     }
     Fill-NetGridRows $gridRt $rows
 }
