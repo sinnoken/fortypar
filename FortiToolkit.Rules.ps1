@@ -47,9 +47,9 @@ function Test-Cond {
     $op = $Cond.Op
     $raw = Get-Val $Obj $Cond
 
-    if ($op -eq 'exists')  { return ($raw -ne $null -and $raw -ne '') }
-    if ($op -eq 'missing') { return ($raw -eq $null -or $raw -eq '') }
-    if ($raw -eq $null) { return $false }
+    if ($op -eq 'exists')  { return ($null -ne $raw -and $raw -ne '') }
+    if ($op -eq 'missing') { return ($null -eq $raw -or $raw -eq '') }
+    if ($null -eq $raw) { return $false }
 
     $v = Strip-Quotes $raw
     $want = $Cond.Val
@@ -110,7 +110,7 @@ function Get-FailDetail {
         if (Test-Cond $Obj $c) { continue }
         $raw = Get-Val $Obj $c
         $shown = 'not set'
-        if ($raw -ne $null -and $raw -ne '') {
+        if ($null -ne $raw -and $raw -ne '') {
             $shown = $raw
             if (-not $Obj.T.ContainsKey($c.Key)) { $shown = "$raw (default)" }
         }
@@ -146,7 +146,7 @@ function Invoke-Compliance {
         $zones[$o.V] = $true
         $k = "$($o.V)|$($o.S)"
         $lst = $idx[$k]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $idx[$k] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $idx[$k] = $lst }
         $lst.Add($o)
     }
 
@@ -167,7 +167,7 @@ function Invoke-Compliance {
         foreach ($z in $targets) {
 
             $objs = $idx["$z|$($r.Scope)"]
-            if ($objs -eq $null) { $objs = $empty }
+            if ($null -eq $objs) { $objs = $empty }
 
             switch ($r.Mode) {
 
@@ -209,7 +209,7 @@ function Invoke-Compliance {
                 'section' {
                     $so = $null
                     foreach ($o in $objs) { if ($o.Sect) { $so = $o; break } }
-                    if ($so -eq $null) {
+                    if ($null -eq $so) {
                         $so = @{ V = $z; S = $r.Scope; N = '(settings)'; T = @{}; L = 0; Sect = $true }
                     }
                     if (-not (Test-All $so $r.Where)) {
@@ -529,3 +529,4 @@ $script:Pack = @(
        Fix=@('# set primary <dns-ip>','# set secondary <dns-ip>')
        Why='FQDN address objects and FortiGuard both depend on name resolution.' }
 )
+

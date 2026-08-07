@@ -38,7 +38,7 @@ function Build-SafeCli {
     $seen = @{}
     foreach ($r in $Recs) {
         $p = $script:CmdbPath[$r.S]
-        if ($p -eq $null) { continue }
+        if ($null -eq $p) { continue }
         $k = "$p|$($r.N)"
         if ($seen.ContainsKey($k)) { continue }
         $seen[$k] = $true
@@ -58,7 +58,7 @@ function Build-SafeCli {
     $byV = @{}
     foreach ($r in $Recs) {
         $lst = $byV[$r.V]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$r.V] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$r.V] = $lst }
         $lst.Add($r)
     }
 
@@ -68,7 +68,7 @@ function Build-SafeCli {
         $byS = @{}
         foreach ($r in $byV[$v]) {
             $lst = $byS[$r.S]
-            if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byS[$r.S] = $lst }
+            if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byS[$r.S] = $lst }
             $lst.Add($r)
         }
         # groups first, so members are still free when their turn comes
@@ -107,7 +107,7 @@ function Build-DecideCli {
         [void]$sb.AppendLine('#')
         foreach ($o in $r.DropObjs) {
             $p = $script:CmdbPath[$o.S]
-            if ($p -ne $null) {
+            if ($null -ne $p) {
                 [void]$sb.AppendLine("diagnose sys cmdb refcnt show $p $($o.N)")
             }
             $ub = $UsedBy[$o]
@@ -156,7 +156,7 @@ function Build-FixCli {
     $byZone = @{}
     foreach ($r in $Recs) {
         $lst = $byZone[$r.Zone]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byZone[$r.Zone] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byZone[$r.Zone] = $lst }
         $lst.Add($r)
     }
 
@@ -166,7 +166,7 @@ function Build-FixCli {
         $byScope = @{}
         foreach ($r in $byZone[$z]) {
             $lst = $byScope[$r.Scope]
-            if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byScope[$r.Scope] = $lst }
+            if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byScope[$r.Scope] = $lst }
             $lst.Add($r)
         }
 
@@ -176,7 +176,7 @@ function Build-FixCli {
             foreach ($r in $byScope[$sc]) {
                 if ($r.Obj -eq '') { $sectRows.Add($r); continue }
                 $lst = $byObj[$r.Obj]
-                if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byObj[$r.Obj] = $lst }
+                if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byObj[$r.Obj] = $lst }
                 $lst.Add($r)
             }
 
@@ -314,3 +314,4 @@ function Lint-TextRules {
     }
     return $out
 }
+

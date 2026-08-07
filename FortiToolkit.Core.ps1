@@ -215,7 +215,7 @@ function Parse-FortiConfig {
                 $sk = $rest.Substring(0, $sp)
                 $sv = $rest.Substring($sp + 1).Trim()
             }
-            if ($curObj -ne $null) {
+            if ($null -ne $curObj) {
                 $curObj.T[$sk] = $sv
             }
             elseif ($curPath -ne '') {
@@ -223,7 +223,7 @@ function Parse-FortiConfig {
                 # these hold real references and real settings.
                 $sid = "$curVdom|$curPath"
                 $so = $sectObjs[$sid]
-                if ($so -eq $null) {
+                if ($null -eq $so) {
                     $so = @{ V = $curVdom; S = $curPath; N = '(settings)'; T = @{}; L = $i + 1; Sect = $true }
                     $sectObjs[$sid] = $so
                 }
@@ -233,7 +233,7 @@ function Parse-FortiConfig {
         }
 
         if ($c0 -eq 'n' -and $line -eq 'next') {
-            if ($curObj -ne $null) {
+            if ($null -ne $curObj) {
                 if ($curSeg -ne 'vdom') { $objects.Add($curObj) }
                 $curObj = $null
             }
@@ -248,7 +248,7 @@ function Parse-FortiConfig {
         }
 
         if ($c0 -eq 'e' -and $line -eq 'end') {
-            if ($curObj -ne $null) {
+            if ($null -ne $curObj) {
                 if ($curSeg -ne 'vdom') { $objects.Add($curObj) }
                 $curObj = $null
             }
@@ -400,9 +400,9 @@ function Invoke-Cleanup {
     $byV = @{}
     foreach ($o in $objs) {
         $m = $byV[$o.V]
-        if ($m -eq $null) { $m = @{}; $byV[$o.V] = $m }
+        if ($null -eq $m) { $m = @{}; $byV[$o.V] = $m }
         $lst = $m[$o.N]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $m[$o.N] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $m[$o.N] = $lst }
         $lst.Add($o)
     }
     # A VDOM can reference an object defined in the global scope. Resolving
@@ -439,7 +439,7 @@ function Invoke-Cleanup {
         $cur = $queue.Dequeue()
         $v = $cur.V
         $vmap = $byV[$v]
-        $useGlobal = ($v -ne 'global' -and $gmap -ne $null)
+        $useGlobal = ($v -ne 'global' -and $null -ne $gmap)
 
         foreach ($kv in $cur.T.GetEnumerator()) {
             if ($script:SkipKeys.ContainsKey($kv.Key)) { continue }
@@ -455,9 +455,9 @@ function Invoke-Cleanup {
 
             foreach ($tok in $toks) {
                 $lst = $null
-                if ($vmap -ne $null) { $lst = $vmap[$tok] }
-                if ($lst -eq $null -and $useGlobal) { $lst = $gmap[$tok] }
-                if ($lst -eq $null) { continue }
+                if ($null -ne $vmap) { $lst = $vmap[$tok] }
+                if ($null -eq $lst -and $useGlobal) { $lst = $gmap[$tok] }
+                if ($null -eq $lst) { continue }
                 foreach ($tgt in $lst) {
                     if ($tgt -eq $cur) { continue }
                     if (-not $usedBy.ContainsKey($tgt)) {
@@ -487,9 +487,9 @@ function Invoke-Cleanup {
 
         $val = ''
         $code = $script:DupSec[$o.S]
-        if ($code -ne $null) {
+        if ($null -ne $code) {
             $k = Get-DupKey $o $code
-            if ($k -ne $null) { $val = $k[1] }
+            if ($null -ne $k) { $val = $k[1] }
         }
 
         if (Test-Builtin $o.N) {
@@ -545,14 +545,14 @@ function Invoke-Cleanup {
     $dupGrp = @{}
     foreach ($o in $objs) {
         $code = $script:DupSec[$o.S]
-        if ($code -eq $null) { continue }
+        if ($null -eq $code) { continue }
         $k = Get-DupKey $o $code
-        if ($k -eq $null) { continue }
+        if ($null -eq $k) { continue }
         $scope = $o.V
         if ($CrossVdom) { $scope = '*' }
         $id = "$scope|$($k[0])|$($k[1])"
         $g = $dupGrp[$id]
-        if ($g -eq $null) {
+        if ($null -eq $g) {
             $g = @{ C = $k[0]; K = $k[1]; I = [System.Collections.Generic.List[object]]::new() }
             $dupGrp[$id] = $g
         }
@@ -572,7 +572,7 @@ function Invoke-Cleanup {
 
         $keep = $null
         foreach ($o in $g.I) { if ($used.ContainsKey($o)) { $keep = $o; break } }
-        if ($keep -eq $null) { $keep = $g.I[0] }
+        if ($null -eq $keep) { $keep = $g.I[0] }
 
         $others = [System.Collections.Generic.List[object]]::new()
         $vset = @{}
@@ -602,3 +602,4 @@ function Invoke-Cleanup {
         UsedBy   = $usedBy
     }
 }
+

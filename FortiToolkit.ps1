@@ -241,9 +241,10 @@ $barCli.Add_SizeChanged({ Update-CliBar })
 
 # ---------- text tabs ----------
 function New-TextTab {
-    param([string]$Title, [string]$Initial)
+    param([string]$Key, [string]$Title, [string]$Initial)
     $tp = New-Object System.Windows.Forms.TabPage
     $tp.Text = $Title
+    $tp.Tag = $Key
     $t = New-Object System.Windows.Forms.TextBox
     $t.Multiline = $true; $t.ReadOnly = $true
     $t.ScrollBars = 'Both'; $t.WordWrap = $false
@@ -255,7 +256,7 @@ function New-TextTab {
     return $t
 }
 
-$txtOv = New-TextTab 'Overview' ''
+$txtOv = New-TextTab 'Ov' 'Overview' ''
 
 # ---------- grid tabs ----------
 function New-GridTab {
@@ -376,13 +377,26 @@ New-GridTab 'Decide' 'Needs a decision' `
     @(38, 78, 118, 215, 50, 140, 215, 85) `
     'Same value, different names. Pick a keeper, repoint every reference, then delete. Deletes are generated commented out.'
 
-$txtRules = New-TextTab 'Rule pack' ''
-$txtLint  = New-TextTab 'Imported rule review' "Use 'Import rules' to load an NCM style XML rule folder.`r`n`r`nThose rules are reviewed, not executed. A text pattern that spans object`r`nboundaries reports compliant when it is not, so importing them here shows`r`nwhich ones cannot be trusted."
+$txtRules = New-TextTab 'Rules' 'Rule pack' ''
+$txtLint  = New-TextTab 'Lint' 'Imported rule review' "Use 'Import rules' to load an NCM style XML rule folder.`r`n`r`nThose rules are reviewed, not executed. A text pattern that spans object`r`nboundaries reports compliant when it is not, so importing them here shows`r`nwhich ones cannot be trusted."
 
 # =================================================================== FILL
 
+# Every TabPage carries its key in Tag, so nothing depends on tab order.
+# Text tabs have a Tag too, so the grid check below is what keeps this
+# answering "which grid is in front", not merely "which tab is in front".
 function Get-TabKey {
-    if ($tabs.SelectedTab -and $tabs.SelectedTab.Tag) { return [string]$tabs.SelectedTab.Tag }
+    if (-not $tabs.SelectedTab) { return $null }
+    $k = [string]$tabs.SelectedTab.Tag
+    if ($k -and $script:Grids.ContainsKey($k)) { return $k }
+    return $null
+}
+
+function Get-TabPage {
+    param([string]$Key)
+    foreach ($tp in $tabs.TabPages) {
+        if ([string]$tp.Tag -eq $Key) { return $tp }
+    }
     return $null
 }
 
@@ -580,21 +594,21 @@ function Fill-Tab {
             foreach ($r in $script:Audit.Comp) {
                 if ($r.Skip) { continue }
                 if ($r.Pass -and -not $script:ShowPass) { continue }
-                [void]$recs.Add($r)
+                $recs.Add($r)
                 [void]$dt.LoadDataRow(@($false, $r.Sev, $r.Zone, $r.Id, $r.Cat, $r.Title, $r.Obj, $r.Detail, $r.Line, $i), $true)
                 $i++
             }
         }
         'Safe' {
             foreach ($r in $script:Audit.Safe) {
-                [void]$recs.Add($r)
+                $recs.Add($r)
                 [void]$dt.LoadDataRow(@($false, $r.V, $r.Kind, $r.S, $r.N, $r.Val, $r.Why, $r.L, $i), $true)
                 $i++
             }
         }
         'Decide' {
             foreach ($r in $script:Audit.Decide) {
-                [void]$recs.Add($r)
+                $recs.Add($r)
                 [void]$dt.LoadDataRow(@($false, $r.V, $r.C, $r.K, $r.Cnt, $r.Keep, $r.Drop, $r.L, $i), $true)
                 $i++
             }
@@ -619,7 +633,7 @@ $script:Grids['Comp'].Add_CellFormatting({
     param($s, $e)
     if ($s.Columns[$e.ColumnIndex].Name -ne 'Sev') { return }
     $c = $script:SevColor[[string]$e.Value]
-    if ($c -eq $null) { return }
+    if ($null -eq $c) { return }
     $e.CellStyle.BackColor = [System.Drawing.Color]::FromArgb($c[0], $c[1], $c[2])
     $e.CellStyle.ForeColor = [System.Drawing.Color]::FromArgb($c[3], $c[4], $c[5])
 })
@@ -767,7 +781,7 @@ function Get-Ticked {
     if (-not $g -or -not $g.DataSource) { return $out }
     foreach ($row in $g.Rows) {
         if ($row.Cells['Fix'].Value -eq $true) {
-            [void]$out.Add($script:Recs[$Key][[int]$row.Cells['Ref'].Value])
+            $out.Add($script:Recs[$Key][[int]$row.Cells['Ref'].Value])
         }
     }
     return $out
@@ -789,7 +803,7 @@ function Refresh-Cli {
     switch ($Key) {
         'Comp' {
             $fails = [System.Collections.Generic.List[object]]::new()
-            foreach ($r in $sel) { if (-not $r.Pass) { [void]$fails.Add($r) } }
+            foreach ($r in $sel) { if (-not $r.Pass) { $fails.Add($r) } }
             if ($fails.Count -eq 0) {
                 $txtCli.Text = '# Only passing checks are ticked. Nothing to remediate.'
                 return
@@ -887,15 +901,15 @@ function Load-File {
 
         $fail = 0
         foreach ($r in $compSorted) { if (-not $r.Pass -and -not $r.Skip) { $fail++ } }
-        $tabs.TabPages[1].Text = "Compliance ($fail)"
-        $tabs.TabPages[2].Text = "Safe to remove ($($clean.Safe.Count))"
-        $tabs.TabPages[3].Text = "Needs a decision ($($clean.Decide.Count))"
+        (Get-TabPage 'Comp').Text   = "Compliance ($fail)"
+        (Get-TabPage 'Safe').Text   = "Safe to remove ($($clean.Safe.Count))"
+        (Get-TabPage 'Decide').Text = "Needs a decision ($($clean.Decide.Count))"
 
         $lblPath.Text = [System.IO.Path]::GetFileName($full)
         $chkCross.Visible = [bool]$parsed.VdomMode
         $pnlDrop.Visible = $false
         $txtCli.Text = '# Tick a row above to build the CLI for it.'
-        if ($tabs.SelectedIndex -eq 0) { $tabs.SelectedIndex = 1 }
+        if ($tabs.SelectedTab -eq (Get-TabPage 'Ov')) { $tabs.SelectedTab = Get-TabPage 'Comp' }
 
         $statusLabel.Text = "$($script:Lines.Length) lines, $($parsed.Objects.Count) objects  |  $fail compliance, $($clean.Safe.Count) removable, $($clean.Decide.Count) duplicate  |  $([math]::Round($sw.Elapsed.TotalSeconds,2))s"
     }
@@ -1053,8 +1067,8 @@ function Build-Overview {
     $byV = @{}
     foreach ($s in $a.Sections) {
         $lst = $byV[$s[0]]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$s[0]] = $lst }
-        [void]$lst.Add($s)
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$s[0]] = $lst }
+        $lst.Add($s)
     }
     foreach ($v in ($byV.Keys | Sort-Object)) {
         [void]$sb.AppendLine("  [$v]")
@@ -1085,8 +1099,8 @@ function Build-RulePack {
     $byCat = @{}
     foreach ($r in $script:Pack) {
         $lst = $byCat[$r.Cat]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byCat[$r.Cat] = $lst }
-        [void]$lst.Add($r)
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byCat[$r.Cat] = $lst }
+        $lst.Add($r)
     }
     foreach ($c in ($byCat.Keys | Sort-Object)) {
         [void]$sb.AppendLine("[$c]")
@@ -1151,8 +1165,8 @@ $btnRules.Add_Click({
     foreach ($l in $lint) {
         $k = "$($l.File)|$($l.Name)"
         $lst = $byRule[$k]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byRule[$k] = $lst }
-        [void]$lst.Add($l)
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byRule[$k] = $lst }
+        $lst.Add($l)
     }
     foreach ($k in ($byRule.Keys | Sort-Object)) {
         $first = $byRule[$k][0]
@@ -1167,7 +1181,7 @@ $btnRules.Add_Click({
         }
     }
     $txtLint.Text = $sb.ToString() -replace "`n", "`r`n"
-    $tabs.SelectedTab = $tabs.TabPages[5]
+    $tabs.SelectedTab = Get-TabPage 'Lint'
     $form.Cursor = [System.Windows.Forms.Cursors]::Default
     $statusLabel.Text = "Imported $($rules.Count) text rule(s); $crit critical, $high high problems"
 })
@@ -1221,7 +1235,7 @@ $btnSave.Add_Click({
 
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     $dir = Join-Path $dlg.SelectedPath ("FortiToolkit_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    New-Item -ItemType Directory -LiteralPath $dir -Force | Out-Null
     $enc = New-Object System.Text.UTF8Encoding $true
 
     [System.IO.File]::WriteAllText((Join-Path $dir '0_overview.txt'), $txtOv.Text, $enc)
@@ -1235,21 +1249,21 @@ $btnSave.Add_Click({
         if ($r.Skip) { continue }
         $st = 'FAIL'
         if ($r.Pass) { $st = 'pass' }
-        [void]$rows.Add(@($st, $r.Sev, $r.Zone, $r.Id, $r.Cat, $r.Title, $r.Obj, $r.Scope, $r.Detail, $r.Line))
+        $rows.Add(@($st, $r.Sev, $r.Zone, $r.Id, $r.Cat, $r.Title, $r.Obj, $r.Scope, $r.Detail, $r.Line))
     }
     Write-Csv (Join-Path $dir '1_compliance.csv') `
         @('Result','Severity','Zone','RuleID','Category','Requirement','Object','Section','Observed','Line') $rows
 
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($r in $script:Audit.Safe) {
-        [void]$rows.Add(@($r.V, $r.Kind, $r.S, $r.N, $r.Val, $r.Why, $r.Cm, $r.L))
+        $rows.Add(@($r.V, $r.Kind, $r.S, $r.N, $r.Val, $r.Why, $r.Cm, $r.L))
     }
     Write-Csv (Join-Path $dir '2_removable.csv') `
         @('Zone','Kind','Section','Name','Value','Why','Comment','Line') $rows
 
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($r in $script:Audit.Decide) {
-        [void]$rows.Add(@($r.V, $r.C, $r.K, $r.Cnt, $r.Keep, $r.Drop, $r.L))
+        $rows.Add(@($r.V, $r.C, $r.K, $r.Cnt, $r.Keep, $r.Drop, $r.L))
     }
     Write-Csv (Join-Path $dir '3_duplicates.csv') `
         @('Zone','Category','Value','Count','SuggestedKeep','WouldDrop','Lines') $rows
@@ -1287,3 +1301,4 @@ $form.Add_Shown({
 })
 
 [void]$form.ShowDialog()
+

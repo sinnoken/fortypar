@@ -193,7 +193,7 @@ function Get-NetModel {
                 foreach ($di in (Split-Tokens ([string]$o.T['dstintf']))) {
                     $k = "$($o.V)|$si|$di"
                     $c = $polPair[$k]
-                    if ($c -eq $null) {
+                    if ($null -eq $c) {
                         $c = @{ V = $o.V; Src = $si; Dst = $di; N = 0; Acc = 0; Den = 0; Off = 0 }
                         $polPair[$k] = $c
                     }
@@ -419,7 +419,7 @@ function Fill-NetIfaces {
     foreach ($i in $M.Ifaces) {
         if ($Zone -ne '*' -and $i.V -ne $Zone) { continue }
         $lst = $byV[$i.V]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$i.V] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $byV[$i.V] = $lst }
         $lst.Add($i)
     }
 
@@ -435,7 +435,7 @@ function Fill-NetIfaces {
         foreach ($i in $byV[$v]) {
             if ($i.Parent -and $i.Parent -ne $i.N) {
                 $lst = $childOf[$i.Parent]
-                if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $childOf[$i.Parent] = $lst }
+                if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $childOf[$i.Parent] = $lst }
                 $lst.Add($i)
                 $isChild[$i.N] = $true
             }
@@ -460,7 +460,7 @@ function Fill-NetIfaces {
 
             # vlan sub-interfaces
             $kids = $childOf[$i.N]
-            if ($kids -ne $null) {
+            if ($null -ne $kids) {
                 foreach ($k in ($kids | Sort-Object @{e = { [int]$_.Vlan }}, @{e = { $_.N }})) {
                     $cn = New-Object System.Windows.Forms.TreeNode
                     $cn.Text = (Format-IfaceLine $k)
@@ -529,7 +529,7 @@ function Fill-NetVpn {
     foreach ($p in $M.Ph2) {
         $k = "$($p.V)|$($p.P1)"
         $lst = $kids[$k]
-        if ($lst -eq $null) { $lst = [System.Collections.Generic.List[object]]::new(); $kids[$k] = $lst }
+        if ($null -eq $lst) { $lst = [System.Collections.Generic.List[object]]::new(); $kids[$k] = $lst }
         $lst.Add($p)
     }
 
@@ -545,7 +545,7 @@ function Fill-NetVpn {
         [void]$treeVpn.Nodes.Add($n)
 
         $lst = $kids["$($p.V)|$($p.N)"]
-        if ($lst -ne $null) {
+        if ($null -ne $lst) {
             foreach ($c in ($lst | Sort-Object @{e = { $_.N }})) {
                 $cn = New-Object System.Windows.Forms.TreeNode
                 $src = $c.Src
@@ -602,7 +602,7 @@ function Fill-NetMatrix {
         [void]$row.Add($s)
         foreach ($d in $dstList) {
             $p = $cell["$s|$d"]
-            if ($p -eq $null) { [void]$row.Add('') }
+            if ($null -eq $p) { [void]$row.Add('') }
             else { [void]$row.Add([string]$p.N) }
         }
         [void]$dt.Rows.Add($row.ToArray())
@@ -664,3 +664,4 @@ $tabs.Add_SelectedIndexChanged({
 $tree.Add_AfterSelect({
     if ($tabs.SelectedTab -eq $tabNet) { Fill-Network }
 })
+
